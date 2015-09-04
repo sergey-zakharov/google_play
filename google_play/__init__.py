@@ -94,7 +94,7 @@ def app(package_name, hl='en'):
         app['developer_website'] = ''
 
     app['rating'] = float(soup.find('div', 'score').text.replace(",", "."))
-    app['reviews'] = int(soup.find('span', 'reviews-num').text.replace(',', ''))
+    app['reviews'] = int(soup.find('span', 'reviews-num').text.replace(',', u''))
     app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
     app['size'] = soup.find('div', itemprop="fileSize").text.strip()
 
