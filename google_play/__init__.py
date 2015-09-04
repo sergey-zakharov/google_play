@@ -94,7 +94,7 @@ def app(package_name, hl='en'):
         app['developer_website'] = ''
 
     try:
-        app['rating'] = float(soup.find('div', 'score')).text.replace(",", "."))
+        app['rating'] = float(soup.find('div', 'score')).text.replace(",", ".")
     except:
         app['rating'] = ''
     
