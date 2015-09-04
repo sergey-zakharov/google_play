@@ -64,7 +64,7 @@ def developer(developer, start=0, num=24, hl="en"):
 
 def app(package_name, hl='en'):
     package_url = ("https://play.google.com/store/apps/details"
-                   "?id=%s&hl=%s") % (package_name, hl)
+                   "?id=%s&hl=%s&c=apps") % (package_name, hl)
 
     r = requests.get(package_url)
     if r.status_code != 200:
