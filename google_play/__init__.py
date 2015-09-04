@@ -93,12 +93,25 @@ def app(package_name, hl='en'):
     else:
         app['developer_website'] = ''
 
-    app['rating'] = float(soup.find('div', 'score').text.replace(",", "."))
-    app['reviews'] = int(soup.find('span', 'reviews-num').text.replace(',', u'').replace(u'\xa0',u''))
-    app['version'] = soup.find('div', itemprop="softwareVersion")
-    if app['version']:
-        app['version'] = app['version'].text.strip()
-    app['size'] = soup.find('div', itemprop="fileSize").text.strip()
+    try:
+        app['rating'] = float(soup.find('div', 'score')).text.replace(",", "."))
+    except:
+        app['rating'] = ''
+    
+    try:
+        app['reviews'] = int(soup.find('span', 'reviews-num')).text.replace(',', u'').replace(u'\xa0',u'')
+    except:
+        app['reviews'] = ''
+    
+    try:
+        app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
+    except:
+        app['version'] = ''
+        
+    try:
+        app['size'] = soup.find('div', itemprop="fileSize").text.strip()
+    except:
+        app['size'] = ''
 
     try:
         app['installs'] = soup.find('div', itemprop="numDownloads").text.strip()
