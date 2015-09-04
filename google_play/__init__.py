@@ -48,9 +48,9 @@ def leaderboard(identifier, category=None, start=0,
     return _get_apps(url)
 
 
-def search(query, start=0, num=24, hl="en"):
+def search(query, start=0, num=24, hl="en", c_type="apps"):
     url = ('https://play.google.com/store/search'
-           '?q=%s&start=%s&num=%s&hl=%s') % (query, start, num, hl)
+           '?q=%s&start=%s&num=%s&hl=%s&c=%s') % (query, start, num, hl, c_type)
 
     return _get_apps(url)
 
@@ -64,7 +64,7 @@ def developer(developer, start=0, num=24, hl="en"):
 
 def app(package_name, hl='en'):
     package_url = ("https://play.google.com/store/apps/details"
-                   "?id=%s&hl=%s&c=apps") % (package_name, hl)
+                   "?id=%s&hl=%s") % (package_name, hl)
 
     r = requests.get(package_url)
     if r.status_code != 200:
