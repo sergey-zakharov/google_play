@@ -48,12 +48,11 @@ def leaderboard(identifier, category=None, start=0,
     return _get_apps(url)
 
 
-def search(query, start=0, num=24, hl="en", c_type="apps"):
+def search(query, start=0, num=24, hl="en", gl='us', c_type="apps"):
     url = ('https://play.google.com/store/search'
-           '?q=%s&start=%s&num=%s&hl=%s&c=%s') % (query, start, num, hl, c_type)
+           '?q=%s&start=%s&num=%s&hl=%s&gl=%s&c=%s') % (query, start, num, hl, gl, c_type)
 
     return _get_apps(url)
-
 
 def developer(developer, start=0, num=24, hl="en"):
     url = ('https://play.google.com/store/apps/developer'
