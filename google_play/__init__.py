@@ -75,7 +75,7 @@ def app(package_name, hl='en'):
     app['title'] = soup.find('div', 'document-title').text.strip()
     app['url'] = package_url
     app['package_name'] = package_name
-    app['description'] = soup.find('div', 'id-app-orig-desc').text.strip()
+    app['description'] = soup.find('div', itemprop='description').text.strip()
     app['category'] = soup.find('span', itemprop='genre').text
     app['logo'] = soup.find('img', "cover-image").attrs['src']
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
