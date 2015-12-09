@@ -21,8 +21,7 @@ PAID = 'topselling_paid'
 
 def _get_apps(url):
     r = requests.get(url)
-    if r.status_code != 200:
-        return None
+    r.raise_for_status()
 
     apps = []
     soup = BeautifulSoup(r.content, "lxml")
@@ -66,8 +65,7 @@ def app(package_name, hl='en'):
                    "?id=%s&hl=%s") % (package_name, hl)
 
     r = requests.get(package_url)
-    if r.status_code != 200:
-        return None
+    r.raise_for_status()
 
     soup = BeautifulSoup(r.content, "lxml")
 
