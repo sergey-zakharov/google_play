@@ -61,12 +61,22 @@ def developer(developer, start=0, num=24, hl="en"):
     return _get_apps(url)
 
 
-def app(package_name, hl='en'):
+class AppUnavailable(Exception):
+    pass
+
+
+def app(package_name, hl='en', gl='en'):
     package_url = ("https://play.google.com/store/apps/details"
-                   "?id=%s&hl=%s") % (package_name, hl)
+                   "?id=%s&hl=%s&gl=%s") % (package_name, hl, gl)
 
     r = requests.get(package_url, headers={'User-Agent': str(time.time())})
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            raise AppUnavailable("Application {} unavailable in country {}".format(package_name, gl))
+        else:
+            raise
 
     soup = BeautifulSoup(r.content, "lxml")
 
