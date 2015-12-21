@@ -1,4 +1,5 @@
 import re
+import time
 import urllib
 
 from bs4 import BeautifulSoup
@@ -64,7 +65,7 @@ def app(package_name, hl='en'):
     package_url = ("https://play.google.com/store/apps/details"
                    "?id=%s&hl=%s") % (package_name, hl)
 
-    r = requests.get(package_url)
+    r = requests.get(package_url, headers={'User-Agent': str(time.time())})
     r.raise_for_status()
 
     soup = BeautifulSoup(r.content, "lxml")
