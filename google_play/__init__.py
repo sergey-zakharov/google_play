@@ -1,9 +1,12 @@
 import re
 import time
+import os.path
 import urllib
+from urllib.parse import urlparse, parse_qs
 
 from bs4 import BeautifulSoup
 import requests
+import dateparser
 
 CATEGORIES = [
     "application", "app_wallpaper", "app_widgets", "arcade",
@@ -83,16 +86,23 @@ def app(package_name, hl='en', gl='en'):
     app = dict()
     app['title'] = soup.find('div', 'document-title').text.strip()
     app['url'] = package_url
-    app['package_name'] = package_name
-    app['description'] = soup.find('div', itemprop='description').text.strip()
-    app['category'] = soup.find('span', itemprop='genre').text
+    app['package_id'] = package_name
+    app['description'] = soup.find('div', itemprop='description').find('div').contents
+    app['category_name'] = soup.find('span', itemprop='genre').text
+    app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
     app['logo'] = soup.find('img', "cover-image").attrs['src']
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
     app['developer_name'] = soup.find('div', itemprop="author").a.text.strip()
+    app['developer_id'] = parse_qs(urlparse(soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query)['id'][0]
+    app['recent_changes'] = [recent.text for recent in soup.find_all('div', 'recent-change')]
+    app['date_published'] = dateparser.parse(soup.find('div', 'content', itemprop='datePublished').text)
     try:
         app['developer_email'] = soup.find('a', href=re.compile("^mailto")).attrs['href'][7:]
     except:
         app['developer_email'] = ''
+    app['top_developer'] = bool(soup.find_all('meta', itemprop='topDeveloperBadgeUrl'))
+    app['in_app_payments'] = bool(soup.find_all('div', 'inapp-msg'))
+    app['content_rating'] = soup.find('img', 'content-rating-badge')['alt']
 
     link = soup.find('a', "dev-link").attrs['href']
     developer_website = re.search('\?q=(.*)&sa', link)
@@ -102,14 +112,21 @@ def app(package_name, hl='en', gl='en'):
         app['developer_website'] = ''
 
     try:
-        app['rating'] = float(soup.find('div', 'score')).text.replace(",", ".")
+        app['developer_address'] = soup.find('div', 'physical-address').text.strip()
+    except:
+        app['developer_address'] = ''
+
+    try:
+        app['rating'] = float(soup.find('div', 'score').text.replace(",", "."))
+        hist = soup.find('div', 'rating-histogram')
+        app['rating_counts'] = [int(hist.find('div', name).find('span', 'bar-number').text.replace(',', '').replace('\xa0', '')) for name in ('one', 'two', 'three', 'four', 'five')]
     except:
         app['rating'] = ''
     
     try:
-        app['reviews'] = int(soup.find('span', 'reviews-num')).text.replace(',', u'').replace(u'\xa0',u'')
+        app['reviews_num'] = int(soup.find('span', 'reviews-num').text.replace(',', u'').replace(u'\xa0',u''))
     except:
-        app['reviews'] = ''
+        app['reviews_num'] = ''
     
     try:
         app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
@@ -117,12 +134,12 @@ def app(package_name, hl='en', gl='en'):
         app['version'] = ''
         
     try:
-        app['size'] = soup.find('div', itemprop="fileSize").text.strip()
+        app['size'] = int(float(soup.find('div', itemprop="fileSize").text.strip().replace(',', '.')[:-1]) * 10 ** 6)
     except:
         app['size'] = ''
 
     try:
-        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip()
+        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip().replace('\xa0', '').replace(',', '').replace(b'\xe2\x80\x93'.decode(), ' - ')
     except:
         app['installs'] = ''
 
