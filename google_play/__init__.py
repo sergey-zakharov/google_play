@@ -2,6 +2,7 @@ import re
 import time
 import os.path
 import urllib
+import contextlib
 from urllib.parse import urlparse, parse_qs
 
 from bs4 import BeautifulSoup
@@ -22,6 +23,7 @@ CATEGORIES = [
 
 FREE = 'topselling_free'
 PAID = 'topselling_paid'
+
 
 def _get_apps(url):
     r = requests.get(url)
@@ -57,6 +59,7 @@ def search(query, start=0, num=24, hl="en", gl='us', c_type="apps"):
 
     return _get_apps(url)
 
+
 def developer(developer, start=0, num=24, hl="en"):
     url = ('https://play.google.com/store/apps/developer'
            '?id=%s&start=%s&num=%s&hl=%s') % (urllib.quote_plus(developer), start, num, hl)
@@ -66,6 +69,14 @@ def developer(developer, start=0, num=24, hl="en"):
 
 class AppUnavailable(Exception):
     pass
+
+
+@contextlib.contextmanager
+def hideexception():
+    try:
+        yield
+    except:
+        pass
 
 
 def app(package_name, hl='en', gl='en'):
@@ -91,16 +102,16 @@ def app(package_name, hl='en', gl='en'):
     app['category_name'] = soup.find('span', itemprop='genre').text
     app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
     app['logo'] = soup.find('img', "cover-image").attrs['src']
-    app['small_logo'] = app['logo'].replace('w300', 'w100')
+    app['small_logo'] = app['logo'].replace('=w300', '=w100')
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
     app['developer_name'] = soup.find('div', itemprop="author").a.text.strip()
-    app['developer_id'] = parse_qs(urlparse(soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query)['id'][0]
+    app['developer_id'] = parse_qs(urlparse(
+        soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query
+    )['id'][0]
     app['recent_changes'] = [recent.text for recent in soup.find_all('div', 'recent-change')]
     app['date_published'] = dateparser.parse(soup.find('div', 'content', itemprop='datePublished').text)
-    try:
+    with hideexception():
         app['developer_email'] = soup.find('a', href=re.compile("^mailto")).attrs['href'][7:]
-    except:
-        app['developer_email'] = ''
     app['top_developer'] = bool(soup.find_all('meta', itemprop='topDeveloperBadgeUrl'))
     app['in_app_payments'] = bool(soup.find_all('div', 'inapp-msg'))
     app['content_rating'] = soup.find('img', 'content-rating-badge')['alt']
@@ -109,40 +120,28 @@ def app(package_name, hl='en', gl='en'):
     developer_website = re.search('\?q=(.*)&sa', link)
     if developer_website:
         app['developer_website'] = developer_website.group(1) or ''
-    else:
-        app['developer_website'] = ''
 
-    try:
+    with hideexception():
         app['developer_address'] = soup.find('div', 'physical-address').text.strip()
-    except:
-        app['developer_address'] = ''
 
-    try:
+    with hideexception():
         app['rating'] = float(soup.find('div', 'score').text.replace(",", "."))
         hist = soup.find('div', 'rating-histogram')
-        app['rating_counts'] = [int(hist.find('div', name).find('span', 'bar-number').text.replace(',', '').replace('\xa0', '')) for name in ('one', 'two', 'three', 'four', 'five')]
-    except:
-        app['rating'] = ''
-    
-    try:
-        app['reviews_num'] = int(soup.find('span', 'reviews-num').text.replace(',', u'').replace(u'\xa0',u''))
-    except:
-        app['reviews_num'] = ''
-    
-    try:
-        app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
-    except:
-        app['version'] = ''
-        
-    try:
-        app['size'] = int(float(soup.find('div', itemprop="fileSize").text.strip().replace(',', '.')[:-1]) * 10 ** 6)
-    except:
-        app['size'] = ''
+        app['rating_counts'] = [int(hist.find('div', name).find('span', 'bar-number').text.replace(',', '').replace('\xa0', ''))
+                                for name in ('one', 'two', 'three', 'four', 'five')]
 
-    try:
-        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip().replace('\xa0', '').replace(',', '').replace(b'\xe2\x80\x93'.decode(), ' - ')
-    except:
-        app['installs'] = ''
+    with hideexception():
+        app['reviews_num'] = int(soup.find('span', 'reviews-num').text.replace(',', u'').replace(u'\xa0', u''))
+
+    with hideexception():
+        app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
+
+    with hideexception():
+        app['size'] = int(float(soup.find('div', itemprop="fileSize").text.strip().replace(',', '.')[:-1]) * 10 ** 6)
+
+    with hideexception():
+        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip().replace('\xa0', '')\
+            .replace(',', '').replace(b'\xe2\x80\x93'.decode(), ' - ')
 
     app['android'] = soup.find('div', itemprop="operatingSystems").text.strip()
     app['images'] = [im.attrs['src']
@@ -152,7 +151,5 @@ def app(package_name, hl='en', gl='en'):
     if html:
         app['similar'] = [similar.attrs['data-docid']
                           for similar in html.find_all('div', 'card')]
-    else:
-        app['similar'] = []
 
     return app
