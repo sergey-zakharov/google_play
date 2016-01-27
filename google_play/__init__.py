@@ -91,6 +91,7 @@ def app(package_name, hl='en', gl='en'):
     app['category_name'] = soup.find('span', itemprop='genre').text
     app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
     app['logo'] = soup.find('img', "cover-image").attrs['src']
+    app['small_logo'] = app['logo'].replace('w300', 'w100')
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
     app['developer_name'] = soup.find('div', itemprop="author").a.text.strip()
     app['developer_id'] = parse_qs(urlparse(soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query)['id'][0]
