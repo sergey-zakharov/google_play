@@ -89,6 +89,8 @@ def app(package_name, hl='en', gl='en'):
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 403:
             raise AppUnavailable("Application {} unavailable in country {}".format(package_name, gl))
+        if e.response.status_code == 404:
+            raise AppUnavailable("Application {} unavailable".format(package_name))
         else:
             raise
 
