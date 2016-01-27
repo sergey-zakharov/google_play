@@ -114,7 +114,10 @@ def app(package_name, hl='en', gl='en'):
         app['developer_email'] = soup.find('a', href=re.compile("^mailto")).attrs['href'][7:]
     app['top_developer'] = bool(soup.find_all('meta', itemprop='topDeveloperBadgeUrl'))
     app['in_app_payments'] = bool(soup.find_all('div', 'inapp-msg'))
-    app['content_rating'] = soup.find('img', 'content-rating-badge')['alt']
+    try:
+        app['content_rating'] = soup.find('img', 'content-rating-badge')['alt']
+    except:
+        app['content_rating'] = soup.find('div', 'content-rating-title').text
 
     link = soup.find('a', "dev-link").attrs['href']
     developer_website = re.search('\?q=(.*)&sa', link)
