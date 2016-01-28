@@ -100,7 +100,7 @@ def app(package_name, hl='en', gl='en'):
     app['title'] = soup.find('div', 'document-title').text.strip()
     app['url'] = package_url
     app['package_id'] = package_name
-    app['description'] = soup.find('div', itemprop='description').find('div').contents
+    app['description'] = '\n'.join(str(child) for child in soup.find('div', itemprop='description').find('div').children)
     app['category_name'] = soup.find('span', itemprop='genre').text
     app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
     app['logo'] = soup.find('img', "cover-image").attrs['src']
