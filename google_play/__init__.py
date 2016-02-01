@@ -7,7 +7,6 @@ from urllib.parse import urlparse, parse_qs
 
 from bs4 import BeautifulSoup
 import requests
-import dateparser
 
 CATEGORIES = [
     "application", "app_wallpaper", "app_widgets", "arcade",
@@ -79,7 +78,48 @@ def hideexception():
         pass
 
 
-def app(package_name, hl='en', gl='en'):
+class App:
+    def __init__(self, meta, rating):
+        self.meta = meta
+        self.rating = rating
+
+    @staticmethod
+    def from_json(json):
+        rating_fields = ('rating', 'rating_counts', 'reviews_num')
+        dynamic_fields = ('logo', 'screenshots')
+
+        meta = {}
+        meta = {key: value for key, value in json.items() if key not in rating_fields + dynamic_fields}
+        meta['logo'] = App.get_image_id_from_url(json['logo'])
+        meta['screenshots'] = [App.get_image_id_from_url(url) for url in json['screenshots']]
+
+        rating = {}
+        rating = {key: value for key, value in json.items() if key in rating_fields}
+        return App(meta, rating)
+
+    @staticmethod
+    def get_user_content_image(imageid, width, height):
+        return '//lh3.googleusercontent.com/%s=w%d-h%d' % (imageid, width, height)
+
+    @staticmethod
+    def get_image_id_from_url(imageurl):
+        return re.sub(r'^(https:)?//[^/]+/([a-zA-Z0-9\-_]+)=.+$', r'\2', imageurl)
+
+    def get_screenshots(self, width=0, height=0):
+        for screenid in self.meta['screenshots']:
+            yield self.get_user_content_image(screenid, width, height)
+
+    def get_logo(self, width=0, height=0):
+        return self.get_user_content_image(self.meta['logo'], width, height)
+
+    def get_title(self):
+        return self.meta['title']
+
+    def get_rating(self):
+        return self.rating['rating']
+
+
+def fetch_app_json(package_name, hl='en', gl='en'):
     package_url = ("https://play.google.com/store/apps/details"
                    "?id=%s&hl=%s&gl=%s") % (package_name, hl, gl)
 
@@ -94,7 +134,7 @@ def app(package_name, hl='en', gl='en'):
         else:
             raise
 
-    soup = BeautifulSoup(r.content, "lxml")
+    soup = BeautifulSoup(r.content, 'lxml')
 
     app = dict()
     app['title'] = soup.find('div', 'document-title').text.strip()
@@ -103,15 +143,14 @@ def app(package_name, hl='en', gl='en'):
     app['description'] = '\n'.join(str(child) for child in soup.find('div', itemprop='description').find('div').children)
     app['category_name'] = soup.find('span', itemprop='genre').text
     app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
-    app['logo'] = soup.find('img', "cover-image").attrs['src']
-    app['small_logo'] = app['logo'].replace('=w300', '=w100')
+    app['logo'] = App.get_image_id_from_url(soup.find('img', "cover-image").attrs['src'])
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
     app['developer_name'] = soup.find('div', itemprop="author").a.text.strip()
     app['developer_id'] = parse_qs(urlparse(
         soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query
     )['id'][0]
     app['recent_changes'] = [recent.text for recent in soup.find_all('div', 'recent-change')]
-    app['date_published'] = dateparser.parse(soup.find('div', 'content', itemprop='datePublished').text)
+    app['date_published'] = soup.find('div', 'content', itemprop='datePublished').text
     with hideexception():
         app['developer_email'] = soup.find('a', href=re.compile("^mailto")).attrs['href'][7:]
     app['top_developer'] = bool(soup.find_all('meta', itemprop='topDeveloperBadgeUrl'))
@@ -149,12 +188,16 @@ def app(package_name, hl='en', gl='en'):
             .replace(',', '').replace(b'\xe2\x80\x93'.decode(), ' - ')
 
     app['android'] = soup.find('div', itemprop="operatingSystems").text.strip()
-    app['images'] = [im.attrs['src']
-                     for im in soup.find_all('img', itemprop="screenshot")]
+    app['screenshots'] = [im.attrs['src'] for im in soup.find_all('img', itemprop='screenshot')]
 
-    html = soup.find('div', "rec-cluster")
+    html = soup.find('div', 'rec-cluster')
     if html:
         app['similar'] = [similar.attrs['data-docid']
                           for similar in html.find_all('div', 'card')]
 
     return app
+
+
+def fetch_app(package_name, hl='en', gl='en'):
+    json = fetch_app_json(package_name, gl, gl)
+    return App.from_json(json)
