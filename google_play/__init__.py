@@ -117,6 +117,15 @@ class App:
 
     def get_rating(self):
         return self.rating['rating']
+        
+    def get_categories(self):
+        return [self.meta['category_name']]
+
+    def get_developer(self):
+        return self.meta['developer_name']
+
+    def get_similar_apps(self):
+        return self.meta['similar']
 
 
 def fetch_app_json(package_name, hl='en', gl='en'):
