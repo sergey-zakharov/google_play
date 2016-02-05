@@ -1,5 +1,9 @@
 import re
+import time
+import os.path
 import urllib
+import contextlib
+from urllib.parse import urlparse, parse_qs
 
 from bs4 import BeautifulSoup
 import requests
@@ -19,10 +23,10 @@ CATEGORIES = [
 FREE = 'topselling_free'
 PAID = 'topselling_paid'
 
+
 def _get_apps(url):
     r = requests.get(url)
-    if r.status_code != 200:
-        return None
+    r.raise_for_status()
 
     apps = []
     soup = BeautifulSoup(r.content, "lxml")
@@ -54,6 +58,7 @@ def search(query, start=0, num=24, hl="en", gl='us', c_type="apps"):
 
     return _get_apps(url)
 
+
 def developer(developer, start=0, num=24, hl="en"):
     url = ('https://play.google.com/store/apps/developer'
            '?id=%s&start=%s&num=%s&hl=%s') % (urllib.quote_plus(developer), start, num, hl)
@@ -61,71 +66,138 @@ def developer(developer, start=0, num=24, hl="en"):
     return _get_apps(url)
 
 
-def app(package_name, hl='en'):
+class AppUnavailable(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def hideexception():
+    try:
+        yield
+    except:
+        pass
+
+
+class App:
+    def __init__(self, meta, rating):
+        self.meta = meta
+        self.rating = rating
+
+    @staticmethod
+    def from_json(json):
+        rating_fields = ('rating', 'rating_counts', 'reviews_num')
+        dynamic_fields = ('logo', 'screenshots')
+
+        meta = {}
+        meta = {key: value for key, value in json.items() if key not in rating_fields + dynamic_fields}
+        meta['logo'] = App.get_image_id_from_url(json['logo'])
+        meta['screenshots'] = [App.get_image_id_from_url(url) for url in json['screenshots']]
+
+        rating = {}
+        rating = {key: value for key, value in json.items() if key in rating_fields}
+        return App(meta, rating)
+
+    @staticmethod
+    def get_user_content_image(imageid, width, height):
+        return '//lh3.googleusercontent.com/%s=w%d-h%d' % (imageid, width, height)
+
+    @staticmethod
+    def get_image_id_from_url(imageurl):
+        return re.sub(r'^(https:)?//[^/]+/([a-zA-Z0-9\-_]+)=.+$', r'\2', imageurl)
+
+    def get_screenshots(self, width=0, height=0):
+        for screenid in self.meta['screenshots']:
+            yield self.get_user_content_image(screenid, width, height)
+
+    def get_logo(self, width=0, height=0):
+        return self.get_user_content_image(self.meta['logo'], width, height)
+
+    def get_title(self):
+        return self.meta['title']
+
+    def get_rating(self):
+        return self.rating['rating']
+
+
+def fetch_app_json(package_name, hl='en', gl='en'):
     package_url = ("https://play.google.com/store/apps/details"
-                   "?id=%s&hl=%s") % (package_name, hl)
+                   "?id=%s&hl=%s&gl=%s") % (package_name, hl, gl)
 
-    r = requests.get(package_url)
-    if r.status_code != 200:
-        return None
+    r = requests.get(package_url, headers={'User-Agent': str(time.time())})
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            raise AppUnavailable("Application {} unavailable in country {}".format(package_name, gl))
+        if e.response.status_code == 404:
+            raise AppUnavailable("Application {} unavailable".format(package_name))
+        else:
+            raise
 
-    soup = BeautifulSoup(r.content, "lxml")
+    soup = BeautifulSoup(r.content, 'lxml')
 
     app = dict()
     app['title'] = soup.find('div', 'document-title').text.strip()
     app['url'] = package_url
-    app['package_name'] = package_name
-    app['description'] = soup.find('div', itemprop='description').text.strip()
-    app['category'] = soup.find('span', itemprop='genre').text
-    app['logo'] = soup.find('img', "cover-image").attrs['src']
+    app['package_id'] = package_name
+    app['description'] = '\n'.join(str(child) for child in soup.find('div', itemprop='description').find('div').children)
+    app['category_name'] = soup.find('span', itemprop='genre').text
+    app['category_id'] = os.path.split(soup.find('a', 'category')['href'])[1]
+    app['logo'] = App.get_image_id_from_url(soup.find('img', "cover-image").attrs['src'])
     app['price'] = soup.find('meta', itemprop="price").attrs['content']
     app['developer_name'] = soup.find('div', itemprop="author").a.text.strip()
-    try:
+    app['developer_id'] = parse_qs(urlparse(
+        soup.find('div', itemprop='author').find('meta', itemprop='url')['content']).query
+    )['id'][0]
+    app['recent_changes'] = [recent.text for recent in soup.find_all('div', 'recent-change')]
+    app['date_published'] = soup.find('div', 'content', itemprop='datePublished').text
+    with hideexception():
         app['developer_email'] = soup.find('a', href=re.compile("^mailto")).attrs['href'][7:]
+    app['top_developer'] = bool(soup.find_all('meta', itemprop='topDeveloperBadgeUrl'))
+    app['in_app_payments'] = bool(soup.find_all('div', 'inapp-msg'))
+    try:
+        app['content_rating'] = soup.find('img', 'content-rating-badge')['alt']
     except:
-        app['developer_email'] = ''
+        app['content_rating'] = soup.find('div', 'content-rating-title').text
 
     link = soup.find('a', "dev-link").attrs['href']
     developer_website = re.search('\?q=(.*)&sa', link)
     if developer_website:
         app['developer_website'] = developer_website.group(1) or ''
-    else:
-        app['developer_website'] = ''
 
-    try:
-        app['rating'] = float(soup.find('div', 'score')).text.replace(",", ".")
-    except:
-        app['rating'] = ''
-    
-    try:
-        app['reviews'] = int(soup.find('span', 'reviews-num')).text.replace(',', u'').replace(u'\xa0',u'')
-    except:
-        app['reviews'] = ''
-    
-    try:
+    with hideexception():
+        app['developer_address'] = soup.find('div', 'physical-address').text.strip()
+
+    with hideexception():
+        app['rating'] = float(soup.find('div', 'score').text.replace(",", "."))
+        hist = soup.find('div', 'rating-histogram')
+        app['rating_counts'] = [int(hist.find('div', name).find('span', 'bar-number').text.replace(',', '').replace('\xa0', ''))
+                                for name in ('one', 'two', 'three', 'four', 'five')]
+
+    with hideexception():
+        app['reviews_num'] = int(soup.find('span', 'reviews-num').text.replace(',', u'').replace(u'\xa0', u''))
+
+    with hideexception():
         app['version'] = soup.find('div', itemprop="softwareVersion").text.strip()
-    except:
-        app['version'] = ''
-        
-    try:
-        app['size'] = soup.find('div', itemprop="fileSize").text.strip()
-    except:
-        app['size'] = ''
 
-    try:
-        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip()
-    except:
-        app['installs'] = ''
+    with hideexception():
+        app['size'] = int(float(soup.find('div', itemprop="fileSize").text.strip().replace(',', '.')[:-1]) * 10 ** 6)
+
+    with hideexception():
+        app['installs'] = soup.find('div', itemprop="numDownloads").text.strip().replace('\xa0', '')\
+            .replace(',', '').replace(b'\xe2\x80\x93'.decode(), ' - ')
 
     app['android'] = soup.find('div', itemprop="operatingSystems").text.strip()
-    app['images'] = [im.attrs['src']
-                     for im in soup.find_all('img', itemprop="screenshot")]
+    app['screenshots'] = [im.attrs['src'] for im in soup.find_all('img', itemprop='screenshot')]
 
-    html = soup.find('div', "rec-cluster")
+    html = soup.find('div', 'rec-cluster')
     if html:
         app['similar'] = [similar.attrs['data-docid']
                           for similar in html.find_all('div', 'card')]
-    else:
-        app['similar'] = []
 
     return app
+
+
+def fetch_app(package_name, hl='en', gl='en'):
+    json = fetch_app_json(package_name, gl, gl)
+    return App.from_json(json)
